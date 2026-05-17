@@ -10,7 +10,7 @@ Part 2 should assume students can already clone a repository, make commits, crea
 
 ## Short Summary
 
-The core topics are merge strategy, practical rebase workflows, interactive rebase, cherry-pick, reflog recovery, and lazygit.
+The core topics are merge strategy, practical rebase workflows, interactive rebase, cherry-pick, reflog recovery, lazygit, fork/PR workflow, and GitHub Actions.
 ## Proposed Audience Assumptions
 
 Students should already know:
@@ -358,6 +358,51 @@ Team rules to propose:
 - Rebase or squash local noisy commits before review.
 - Use `--force-with-lease` if rewriting a personal remote branch.
 - Ask before rewriting a branch used by others.
+
+
+### Section 10: Fork and PR Workflow
+
+For open source projects where contributors lack direct write access.
+
+Topics:
+
+- Fork: your personal copy of the upstream repository.
+- Adding upstream as a remote.
+- Keeping your fork synchronized with upstream.
+- Opening pull requests for review.
+
+Commands:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/repository.git
+git remote add upstream https://github.com/UPSTREAM_OWNER/repository.git
+git fetch upstream
+git checkout -b feature/my-change
+git push origin feature/my-change
+```
+
+Sync fork with upstream:
+
+```bash
+git fetch upstream
+git merge upstream/main
+git push origin main
+```
+
+Practice: Fork a repo, create a feature branch, push, and open a PR.
+
+### Section 11: GitHub Actions - Brief Introduction
+
+GitHub Actions automates tasks triggered by repository events.
+
+Key concepts:
+
+- Workflows: YAML files in `.github/workflows/`.
+- Events: push, pull request, schedule.
+- Jobs and steps execute on runners.
+
+Example: ![How mn run JOJ3 on Focs Gitea](https://focs.gc.edu.cn/git/JOJ/JOJ3)
+
 
 
 ### Section 10: Debugging Git States
