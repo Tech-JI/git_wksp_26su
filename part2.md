@@ -1,525 +1,632 @@
-# Git Workshop Part 2 Draft
+---
+title:
+  - Git Workshop Part 2
+author:
+  - Tech GC
+theme:
+  - Copenhagen
+date:
+  - May 2025
+colorlinks: true
+linkcolor: .
+urlcolor: blue
+header-includes: |
+  \setbeamertemplate{headline}{}
+  \lstset{basicstyle=\ttfamily,frame=single,frameround=tttt,columns=fullflexible,keepspaces=true,backgroundcolor=\color{yellow!20}}
+---
 
-Tech GC
+\tableofcontents
 
-## Purpose
+# 1. Mental Model Review: Commits, Branches, and References
 
-Part 1 introduces Git basics: shell usage, setup, repositories, staging, commits, simple undo commands, basic branches, remotes, merge conflict resolution, and common beginner issues.
+## Recap from Part 1
 
-Part 2 should assume students can already clone a repository, make commits, create branches, push and pull, and resolve a simple conflict. The goal is to help students work confidently in realistic team workflows where history is non-linear, mistakes happen, and branches need to be cleaned up before sharing.
+- **Commits**: Snapshots tracking cryptographic states with parent links.
+- **Branches**: Lightweight, movable pointers to specific commits.
+- **`HEAD`**: Your current location indicator (where you are writing next).
+- **Remote Branches**: Read-only tracking pointers (e.g., `origin/main`).
 
-## Short Summary
+## Core Key Insight
 
-The core topics are merge strategy, practical rebase workflows, interactive rebase, cherry-pick, reflog recovery, lazygit, fork/PR workflow, and GitHub Actions.
-## Proposed Audience Assumptions
+:::center
+**Branches do not contain commits. Branches point to commits, and commits point backward to their parents.**
+:::
 
-Students should already know:
-
-- `git clone`, `git status`, `git add`, `git commit`, `git diff`, `git log`
-- `git branch`, `git checkout` or `git switch`
-- Basic `git merge` and `git rebase`
-- `git push`, `git pull`
-- Simple conflict resolution
-- `git restore`, `git reset`, and `git commit --amend`
-
-## Workshop Structure
-
-### Section 1: Mental Model Review - Commits, Branches, and References
-
-First review what part1 has introduced.
-Topics:
-
-- Commit objects as snapshots with parent links.
-- Branch names as movable pointers.
-- `HEAD` as "where I am now".
-- Remote-tracking branches such as `origin/main`.
-- Detached HEAD: what it means and how to recover from it.
-- Reading history with:
+## Visualizing the Graph
 
 ```bash
 git log --graph --oneline --decorate --all
+
 ```
 
-Key idea:
+**What this shows you:**
 
-Branches do not contain commits. Branches point to commits, and commits point backward to parents.
+* Exact history topology and branch divergence.
+* Current position of `HEAD` relative to local and remote tracking branches.
 
+## Detached HEAD State
 
-### Section 2: Merge Strategies and Team Integration
-
-Part 1 introduces merge and fast-forward. Part 2 should explain how teams choose a merge policy.
-
-Topics:
-
-- Fast-forward merge.
-- Merge and commit.
-- Squash merge.
-- Rebase and merge commit.
-- Why some projects prefer linear history and others prefer preserving branch topology.
-
-Commands:
+**The Concept:**
+Checking out a specific commit instead of a branch decouples `HEAD`.
 
 ```bash
-git merge <branch>
-git merge --no-ff <branch>
-git merge --ff-only <branch>
-git merge --squash <branch>
-git checkout <branch2> && git rebase <branch1> && git checkout <branch1> && git merge <branch2>
+git checkout abc1234  # HEAD now points directly to a commit
+
 ```
 
-Decision guide:
+> **Warning:** New commits created here are orphaned once you checkout another branch.
 
-- Use fast-forward when the branch has no divergent history.
-- Use `--no-ff` when the feature branch itself is meaningful and should remain visible.
-- Use squash merge when the feature branch has noisy local commits but the final change should be one clean commit(or from external PR).
-- Use rebase and merge commit if the main branch is ahead of the feature branch.
-Practice:
-
-- Create a feature branch with three commits.
-- Merge it into `main` using normal merge.
-- Reset the demo repository and repeat with `--no-ff`, `--ff-only`, and `--squash`.
-- Compare the commit graph after each strategy.
-
-Discussion:
-
-- Which history is easiest to debug later?
-- Which history is easiest for beginners to read?
-- Which history is altered?
-
-### Section 3: Rebase for Clean Feature Branches
-
-Part 1 introduces rebase at a high level. Part 2 should teach practical rebase workflows.
-
-Topics:
-
-- Rebase as "replay my commits on top of another base".
-- A good habit to rebase before opening a pull request.
-- Rebase conflicts: why one rebase can produce multiple conflict stops.
-- `--continue`, `--abort`, and `--skip`.
-
-Commands:
+### Quick Recovery Options
 
 ```bash
-git rebase main
-git rebase --continue
-git rebase --abort
-git rebase --skip
+# Save state immediately
+git checkout -b new-branch-name
+
+# Recover after accidentally leaving
+git reflog
+git checkout -b recovered-branch abc1234
+
 ```
 
-Rules:
+## Understanding References
 
-- Rebase local commits before sharing when you want a clean branch.
-- Do not rebase public commits that teammates may already depend on unless the team explicitly agrees.
-- If you rewrite commits that were already pushed, use `--force-with-lease`, not plain `--force`. Note: This option allows you to say that you expect the history you are updating is what you rebased and want to replace. If the remote ref still points at the commit you specified, you can be sure that no other people did anything to the ref.
+### Reference Types
 
-Command:
+| Type | Example | Behavior |
+| --- | --- | --- |
+| **Branch** | `main`, `feature/login` | Moves forward dynamically with new commits |
+| **Tag** | `v1.0.0`, `release-2.0` | Static snapshot marker; never moves |
+| **Remote-tracking** | `origin/main` | Read-only mirror of remote state |
+| **Special** | `HEAD`, `MERGE_HEAD` | Internal operational pointers |
 
-```bash
-git push --force-with-lease
-```
+### Useful Reference Shortcuts
 
-Practice:
+* `HEAD~1` or `HEAD^` : Direct parent of current commit
+* `HEAD~2` : Grandparent of current commit
+* `main~3` : Three commits back from the tip of the main branch
+* `origin/main@{yesterday}` : State of the tracking branch 24 hours ago
 
-- Create `main` and `feature` branches that diverge.
-- Rebase `feature` onto updated `main`.
-- Resolve at least one conflict during rebase.
-- Compare the graph before and after rebase.
+---
 
-### Section 4: Interactive Rebase - Editing Local History
+# 2. Merge Strategies and Team Integration
 
-This is the main advanced branching section.
+## Integration Choices Overview
 
-Topics:
+### Fast-Forward Merge (`--ff`)
 
-- When interactive rebase is useful:
-  - Fix commit order.
-  - Squash small fixup commits.
-  - Rewrite poor commit messages.
-  - Drop accidental commits.
-  - Split one large commit into smaller commits.
-- The interactive rebase todo list.
-- Actions: `pick`, `reword`, `edit`, `squash`, `fixup`, `drop`.
-- Choosing a rebase range.
-
-Commands:
-
-```bash
-git rebase -i HEAD~3
-git rebase -i main
-```
-
-Example todo list:
+Target branch tip moves straight to source branch tip. No new commit is made.
 
 ```text
-pick 3a1b2c4 add mascot body
-reword 4d5e6f7 add mascot eyes
-fixup 8a9b0c1 fix typo
-pick 2d3e4f5 add README note
+Before: A---B---C (main) -> \ -> D---E (feature)
+After:  A---B---C---D---E (main, feature)
+
 ```
 
-Common workflows:
+### Three-Way Merge (`--no-ff`)
 
-1. Squash noisy commits:
-Change later `pick` commands to `squash` or `fixup`.
+Forces a dedicated merge commit, explicitly preserving historical feature context.
 
-2. Rename an old commit:
-Change `pick` to `reword`.
+```text
+Before: A---B---C (main) -> \ -> D---E (feature)
+After:  A---B---C-------F (main)
+                 \     /
+                  D---E   (feature)
 
-3. Split a large commit:
-Change `pick` to `edit`, then:
+```
+
+### Squash Merge (`--squash`)
+
+Condenses all incoming changes into a single brand-new commit on the target branch.
+
+```text
+Before: A---B---C (main) -> \ -> D---E---F (feature)
+After:  A---B---C---G (main)
+
+```
+
+## Decision Strategy Matrix
+
+| Strategy | Best Use Case | History Style | Extra Commit? |
+| --- | --- | --- | --- |
+| **Fast-Forward** | Short-lived linear branches | Seamless line | No |
+| **Three-Way** | Shared/Long-lived branches | Topological | Yes |
+| **`--no-ff`** | Strict Feature/PR tracking | Grouped graph | Yes |
+| **Squash** | Noisy local feature commits | Compact line | Yes |
+
+## Team Integration Workflows
+
+### Approach A: Linear History Preference
+
+Keep the main line strictly straightforward. Clean chronological reading.
 
 ```bash
+git checkout feature-branch
+git rebase main
+git checkout main
+git merge feature-branch  # Results in a clean Fast-Forward
+
+```
+
+### Approach B: Preserved Topology Preference
+
+Explicitly show where work started, evolved, and was integrated.
+
+```bash
+git checkout main
+git merge --no-ff feature-branch  # Guarantees a merge node
+
+```
+
+---
+
+# 3. Rebase for Clean Feature Branches
+
+## The Mechanics of Rebase
+
+Rebase updates the starting parent commit of your branch, replaying your local changes sequentially on top of a new base commit.
+
+```text
+Before Rebase:
+A---B---C  (main)
+         \
+          D---E  (feature)
+
+After 'git rebase main':
+A---B---C  (main)
+         \
+          D'---E'  (feature)
+
+```
+
+> **Note:** `D'` and `E'` contain identical code changes to `D` and `E`, but carry distinct hash signatures and unique parent identifiers.
+
+## Rebase Execution Steps
+
+```bash
+# Step 1: Update your local tracking coordinates
+git checkout main && git pull
+
+# Step 2: Begin replay process
+git checkout feature/my-feature
+git rebase main
+
+# Step 3: Handle individual files if conflicts occur, then proceed
+git add conflict_resolved.txt
+git rebase --continue
+
+```
+
+## Rebase Interruption Controls
+
+* `git rebase --continue` : Advance to next commit match after a resolution.
+* `git rebase --skip` : Drop the current conflicting commit entirely.
+* `git rebase --abort` : Instantly halt and return your branch to pre-rebase status.
+
+## The Cardinal Rule of Rebase
+
+:::center
+**Never rebase commits that have already been pushed to a shared public repository.**
+:::
+
+If forced to update a shared, rebased feature branch, bypass tracking mismatches safely:
+
+```bash
+git push --force-with-lease  # Rejects push if remote has unseen changes
+
+```
+
+---
+
+# 4. Interactive Rebase: Editing Local History
+
+## Complete Control Over Commits
+
+Interactive rebase (`git rebase -i`) acts as a local history editor before pushing your updates up to code review.
+
+```bash
+# Open interactive configuration for the last 4 commits
+git rebase -i HEAD~4
+
+```
+
+## Command Directives Reference
+
+| Directive | Alias | Intended Outcome |
+| --- | --- | --- |
+| **`pick`** | `p` | Keep the commit exactly as it is |
+| **`reword`** | `r` | Keep the code changes but rewrite the log message |
+| **`edit`** | `e` | Stop at this commit to modify files or split it |
+| **`squash`** | `s` | Combine changes into previous commit, merging messages |
+| **`fixup`** | `f` | Combine changes into previous commit, discarding this message |
+| **`drop`** | `d` | Erase this specific commit completely from history |
+
+## Common History Edits
+
+### Workflow 1: Squashing Noise
+
+Turn multiple intermediate "work-in-progress" commits into a clean historical entry.
+
+```text
+# Todo list modification example
+pick abc1234 Add login form structure
+f    def5678 Fix layout typo
+f    ghi9012 Add input verification rules
+
+```
+
+### Workflow 2: Splitting a Monolithic Commit
+
+Break one large commit into small, atomic context pieces.
+
+```bash
+# 1. Mark 'edit' next to the targeted commit in the interactive menu
+edit abc1234 Implement complete profile module
+
+# 2. When Git pauses at the commit, step back one snapshot:
 git reset HEAD~1
-git add <first-part>
-git commit -m "first focused commit"
-git add <second-part>
-git commit -m "second focused commit"
+
+# 3. Component Stage and Commit separately
+git add component_a.js && git commit -m "Profile Part 1: Logic"
+git add component_b.js && git commit -m "Profile Part 2: Interface"
+
+# 4. Resume the rebase chain
 git rebase --continue
+
 ```
 
-Safety notes:
+---
 
-- Interactive rebase rewrites commit IDs.
-- Use it freely on private local work.
-- Be careful after pushing.
-- If something goes wrong, use `git reflog`.
+# 5. Cherry-Pick: Moving Selected Commits
 
-Practice:
+## Targeting Specific Commits
 
-- Start with a messy branch containing:
-  - one typo fix commit,
-  - one bad commit message,
-  - one commit that changes two unrelated files,
-  - one accidental debug file.
-- Use interactive rebase to produce a clean final history.
+Cherry-pick isolates single commits from other timelines and applies them directly on top of your current branch.
 
-
-### Section 5: Cherry-Pick - Moving Selected Commits
-
-Cherry-pick is useful when a whole branch should not be merged, but one or two commits are needed elsewhere. It is not very commonly used.
-
-Topics:
-
-- Applying one commit onto the current branch.
-- Applying a range of commits.
-- Duplicated commits and why repeated cherry-picks can confuse history.
-
-Commands:
+:::center
+**"I need this precise fix, without merging that entire unfinished branch."**
+:::
 
 ```bash
-git cherry-pick <commit>
-git cherry-pick <oldest>^..<newest>
+# Extract a singular change onto your active branch
+git cherry-pick abc1234
+
 ```
 
-Use cases:
+## Practical Application Scenarios
 
-- Backport a bug fix from `main` to a release branch.
-- Copy a small config fix from another feature branch.
-- Recover one good commit from an abandoned branch.
+* **Hotfixing**: Pulling a security fix directly from an ongoing testing branch into production.
+* **Backporting**: Moving bug fixes from current development releases to legacy support branches.
+* **Recovery**: Salvaging valid logic structures from a feature track that was abandoned.
 
+## Range and Automation Flags
 
-### Section 6: Reflog - Recovering from Mistakes
+```bash
+# Multi-commit cherry pick (from oldest up to newest, inclusive)
+git cherry-pick abc1234..xyz7890
 
-Topics:
+# Stage changes directly in working directory without creating a commit
+git cherry-pick --no-commit def5678
 
-- `git reflog` records where refs such as `HEAD` and branches used to point.
-- Reflog is local. It is not the same as shared project history.
-- Recovering from:
-  - accidental `git reset --hard`,
-  - bad rebase,
-  - deleted branch,
-  - detached HEAD commit,
-  - mistaken amend.
-- Expiration: reflog is not permanent backup.
+```
 
-Commands:
+---
+
+# 6. Git Reflog: Recovery and Repair
+
+## The Local Safety Net
+
+Reflog tracks every single movement of `HEAD` and branch updates across your local development space.
+
+:::center
+**If a commit was created locally within the past 90 days, Reflog can find and restore it.**
+:::
+
+## Key Mechanics
+
+* Reflog is entirely local; it never travels via `git push` or `git clone`.
+* Entries expire after a set time limit (the default safety period is 90 days).
+
+## Essential Diagnostics
+
+```bash
+# View complete sequential history of HEAD shifts
+git reflog
+
+# Sample Output Format:
+# abc1234 HEAD@{0}: reset: moving to HEAD~2
+# def5678 HEAD@{1}: commit: Add database drivers
+
+```
+
+## Emergency Recovery Solutions
+
+### Scenario A: Accidental Hard Reset Recovery
+
+```bash
+# Recover from an accidental destructive command like: git reset --hard HEAD~3
+git reflog
+# Identify pre-reset snapshot state hash (e.g., HEAD@{1})
+git reset --hard HEAD@{1}
+
+```
+
+### Scenario B: Restoring an Accidentally Deleted Branch
 
 ```bash
 git reflog
-git reset HEAD@{n}
-git switch -c <rescue-branch> HEAD@{n}
+# Locate the last active commit hash belonging to the deleted branch
+git branch feature-restored HEAD@{2}
+
 ```
 
-Safety rule:
+---
 
-When unsure, create a new rescue branch first instead of moving the current branch pointer.
+# 7. Stash, Worktrees, and Partial Staging
 
-### Section 7: Stash, Worktrees, and Partial Staging
+## Git Stash: Temporary Workspace Suspension
 
-These topics help students handle real work interruptions.
-
-Topics:
-
-- Stashing changes, pop out changes, and inspecting stash content.
-- Optional advanced topic: `git worktree` for multiple branches checked out at once.
-
-Commands:
+Save incomplete modifications without generating messy commits when context switching.
 
 ```bash
-git stash list
-git stash apply stash@{0}
+# Stash tracked modifications
+git stash
+
+# Stash including new, untracked workspace files
+git stash -u
+
+# Describe your stashed changes clearly
+git stash save "In-progress API refactor"
+
+# Restore the most recent stash and remove it from memory
 git stash pop
-git stash drop stash@{0}
+
+# Review all saved stash layers
+git stash list
+
 ```
 
-worktree commands:
+## Git Worktree: Multi-Branch Environments
+
+Check out multiple branches of the same repository simultaneously in separate directories.
+
+:::center
+**Review a PR or execute a hotfix without interrupting or clearing your active workspace.**
+:::
 
 ```bash
-git worktree add ../project-hotfix hotfix
-git worktree list
+# Mount a separate branch into a sibling directory
+git worktree add ../project-hotfix hotfix/api-bug
+
+# Safely tear down directory after finishing the fix
 git worktree remove ../project-hotfix
+
 ```
 
+## Partial Staging (Patch Mode)
 
-### Section 8: Lazygit - Fast Visual Git Workflow
-
-[lazygit](https://github.com/jesseduffield/lazygit) should be introduced as a terminal UI that helps students see the repository state while still learning real Git concepts.
-
-Topics:
-
-- What lazygit is and is not:
-  - It is a Git interface.
-  - It still runs Git operations.
-  - It does not replace understanding commit graphs and history rewriting.
-- Main panels:
-  - status/files,
-  - branches,
-  - commits,
-  - stash,
-  - remotes.
-- Common actions:
-  - stage and unstage files,
-  - stage hunks or lines,
-  - commit,
-  - amend,
-  - create and switch branches,
-  - merge,
-  - rebase,
-  - cherry-pick,
-  - stash,
-  - resolve conflicts.
-
-Suggested installation note:
-
-Install lazygit using the package manager for the system, or follow the official lazygit installation guide.
-
-Commands:
+Interactively break down changes within a single modified file into distinct commits.
 
 ```bash
+git add -p  # Evaluates code block hunks sequentially
+
+```
+
+### Quick Response Map
+
+* `y` : Stage this code hunk.
+* `n` : Skip staging this code hunk.
+* `s` : Split the current hunk into even smaller evaluation pieces.
+* `q` : Exit immediately; preserve current staging configuration.
+
+---
+
+# 8. Lazygit: Visual Terminal Workflow
+
+## Terminal Interface for Git
+
+Lazygit is a highly responsive keyboard-driven terminal UI that maps complex graph configurations onto clear layouts.
+
+:::center
+**Maintains structural clarity without hiding underlying Git CLI mechanics.**
+:::
+
+```bash
+# Launch the interface directly in your repository folder
 lazygit
+
 ```
 
-Suggested live demo:
+## Primary Interface Sections
 
-- Open lazygit in the workshop repository.
-- Stage only part of a file.
-- Commit the staged hunk.
-- Create a branch.
-- Cherry-pick a commit.
-- Start a rebase and show how the state appears.
-- Resolve a simple conflict.
-- Open the command log to connect lazygit actions with actual Git commands.
+1. **Status**: Shows current operational context, branch names, and upstream sync delays.
+2. **Files**: Lists local changes with instant staging controls.
+3. **Branches**: Displays local tracks, remotes, and structural tags.
+4. **Commits**: Visualizes the commit graph history.
+5. **Staging / Diff Main Panel**: Shows line-by-line diff tracking.
 
-Practice:
+## Navigation Basics
 
-- Complete the same branch cleanup exercise twice:
-  - once with Git CLI,
-  - once with lazygit.
-- Compare which steps are clearer in CLI and which are clearer in lazygit.
+* `k` / `j` or Arrows : Move up and down within active panels.
+* `H` / `L` or Left/Right Arrows : Cycle between different panels.
+* `Space` : Toggle staging for a file, hunk, or single line.
+* `c` : Open the commit message interface.
+* `y` : Toggle the command output window to inspect the underlying Git commands.
+* `z` : Trigger an immediate undo step for the last operation.
+* `Esc` or `q` : Step back / Exit the interface.
 
-### Section 9: Remote Collaboration Policies
+---
 
-Part 1 covers push and pull. Part 2 should introduce the policies that prevent team history problems.
+# 9. Remote Collaboration Policies
 
-Topics:
+## Keeping Remotes Organized
 
-- Tracking branches.
-- `git fetch` versus `git pull`.
-- `git pull --rebase`.
-- Protected branches.
-- Merge requests and pull requests.
-- Force push risks.
-- Safer force push with `--force-with-lease`.
-
-Commands:
+### Fetch vs Pull Optimization
 
 ```bash
+# Fetch: Downloads remote updates without modifying local working tracks
 git fetch origin
-git branch -vv
-git push -u origin <branch>
-git push --force-with-lease
-```
 
-Team rules to propose:
+# Pull: Directly combines fetch and merge (can create a messy graph)
+git pull
 
-- Repo manager should set protection rules.
-- Never force push `main`. 
-- Prefer feature branches for all work.
-- Rebase or squash local noisy commits before review.
-- Use `--force-with-lease` if rewriting a personal remote branch.
-- Ask before rewriting a branch used by others.
-
-
-### Section 10: Fork and PR Workflow
-
-For open source projects where contributors lack direct write access.
-
-Topics:
-
-- Fork: your personal copy of the upstream repository.
-- Adding upstream as a remote.
-- Keeping your fork synchronized with upstream.
-- Opening pull requests for review.
-
-Commands:
-
-```bash
-git clone https://github.com/YOUR_USERNAME/repository.git
-git remote add upstream https://github.com/UPSTREAM_OWNER/repository.git
-git fetch upstream
-git checkout -b feature/my-change
-git push origin feature/my-change
-```
-
-Sync fork with upstream:
-
-```bash
-git fetch upstream
-git merge upstream/main
-git push origin main
-```
-
-Practice: Fork a repo, create a feature branch, push, and open a PR.
-
-### Section 11: GitHub Actions - Brief Introduction
-
-GitHub Actions automates tasks triggered by repository events.
-
-Key concepts:
-
-- Workflows: YAML files in `.github/workflows/`.
-- Events: push, pull request, schedule.
-- Jobs and steps execute on runners.
-
-Example: ![How mn run JOJ3 on Focs Gitea](https://focs.gc.edu.cn/git/JOJ/JOJ3)
-
-
-
-### Section 10: Debugging Git States
-
-Advanced students should learn how to diagnose before running commands.
-
-Checklist:
-
-```bash
-git status
-git log --graph --oneline --decorate --all -n 20
-git branch -vv
-git remote -v
-git reflog -n 20
-```
-
-Questions to ask:
-
-- Which branch am I on?
-- Is my working tree clean?
-- What is staged?
-- What commits do I have that the remote does not?
-- What commits does the remote have that I do not?
-- Am I in the middle of a merge, rebase, cherry-pick, or bisect?
-- Can I create a rescue branch before doing anything risky?
-
-Common state files:
-
-- `.git/MERGE_HEAD`: merge in progress.
-- `.git/rebase-merge/` or `.git/rebase-apply/`: rebase in progress.
-- `.git/CHERRY_PICK_HEAD`: cherry-pick in progress.
-
-
-## Capstone Exercise: Clean Up a Messy Team Repository
-
-Scenario:
-
-The team is building a project. Several feature branches exist. Some commits are useful, some are noisy, and one branch has a bad rebase. Students must prepare a clean final history for review.
-
-Tasks:
-
-1. Inspect all branches with a graph.
-2. Recover one lost commit using reflog.
-3. Rebase a feature branch onto `main`.
-4. Resolve a rebase conflict.
-5. Use interactive rebase to squash and reword commits.
-6. Cherry-pick one bug fix from an abandoned branch.
-7. Merge the cleaned feature branch using the selected team policy.
-8. Use lazygit to review the final graph and staged changes.
-9. Push the final branch to the remote.
-
-Suggested deliverables:
-
-- A clean commit history.
-- A short explanation of merge, rebase, and cherry-pick choices.
-- A screenshot or copied output of:
-
-```bash
-git log --graph --oneline --decorate --all
-```
-
-
-## Command Summary
-
-### Inspect History
-
-```bash
-git log --graph --oneline --decorate --all
-git branch -vv
-git reflog
-```
-
-### Merge
-
-```bash
-git merge <branch>
-git merge --no-ff <branch>
-git merge --ff-only <branch>
-git merge --squash <branch>
-```
-
-### Rebase
-
-```bash
-git rebase <base>
-git rebase -i HEAD~3
-git rebase --continue
-git rebase --abort
+# Clean Pull: Replays your local commits cleanly on top of incoming changes
 git pull --rebase
+
 ```
 
-### Cherry-Pick
+## Tracking Verification
 
 ```bash
-git cherry-pick <commit>
-git cherry-pick <oldest>^..<newest>
-git cherry-pick --continue
-git cherry-pick --abort
+# Match local branches with remote destinations explicitly
+git push -u origin feature/auth
+
+# Inspect tracking health and divergence distances
+git branch -vv
+
 ```
 
-### Recover
+```text
+Sample Output:
+* main         abc1234 [origin/main] Fix memory leak
+  feature/auth def5678 [origin/feature/auth: ahead 1, behind 2] Update tokens
+
+```
+
+## Core Safety Controls
+
+* Avoid raw `git push --force`. Always protect your upstream target lines by using `git push --force-with-lease`.
+* **Prohibited Action**: Never execute history rewrites or force-pushes on long-lived default branches (e.g., `main`, `master`, `develop`).
+
+---
+
+# 10. Fork and Pull Request Workflow
+
+## Shared Source Management
+
+A **Fork** is an independent, server-side copy of a repository hosted under your personal namespace.
+
+### Repository Ecosystem Map
+
+```text
++---------------------------------------+
+| Upstream Repository (Central/Original) |
++---------------------------------------+
+                   ^
+                   | Pull Request Submissions
+                   |
++---------------------------------------+
+| Origin Repository (Your Remote Fork)  |
++---------------------------------------+
+                   ^
+                   | Push / Pull Syncing
+                   |
++---------------------------------------+
+| Local Workspace (Your Computer)      |
++---------------------------------------+
+
+```
+
+## Step-by-Step Fork Deployment
 
 ```bash
-git reflog
-git switch -c <rescue-branch> <reflog-entry>
-git reset --hard <reflog-entry>
+# Step 1: Clone your personal fork
+git clone [https://github.com/YOUR_USERNAME/repository.git](https://github.com/YOUR_USERNAME/repository.git)
+
+# Step 2: Establish connection to the original project
+git remote add upstream [https://github.com/ORIGINAL_OWNER/repository.git](https://github.com/ORIGINAL_OWNER/repository.git)
+
+# Step 3: Synchronize with upstream changes before starting new work
+git checkout main
+git fetch upstream
+git rebase upstream/main
+git push origin main
+
+# Step 4: Work on your isolated feature track
+git checkout -b feature/contribution
+
 ```
 
-### Safer Force Push
+---
 
-```bash
-git push --force-with-lease
+# 11. GitHub Actions: Automation Basics
+
+## Declarative Workflow Pipelines
+
+GitHub Actions listen for repository events (e.g., pushes, pull requests) to automatically trigger builds, test suites, and deployments.
+
+| Core Concept | Functional Definition |
+| --- | --- |
+| **Workflow** | Automation blueprint script located within `.github/workflows/*.yml` |
+| **Event** | The explicit trigger condition (e.g., `push`, `pull_request`) |
+| **Job** | A sequence of steps executed on a clean virtual machine runner |
+| **Step** | Individual tasks that execute console scripts or predefined actions |
+
+## Standard Continuous Integration Configuration
+
+```yaml
+name: Project Verification Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Import Codebase Source
+        uses: actions/checkout@v4
+
+      - name: Initialize Runtime Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Execute Standard Testing
+        run: |
+          npm ci
+          npm test
+
 ```
 
-### Lazygit
+## Production Workflow Best Practices
 
-```bash
-lazygit
+* **Explicit Pinning**: Use explicit version hashes or major tags (e.g., `actions/checkout@v4`) to avoid unexpected pipeline breaks.
+* **Concurrency Controls**: Cancel older runs automatically when a developer pushes new updates to an active pull request:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 ```
-Should also add some shortcuts of lazygit.
+
+---
+
+# 12. Capstone Exercise: Clean Up a Messy Team Repository
+
+## The Scenario
+
+Your team is preparing a release. The development branches are cluttered with repetitive, unverified commits, someone accidentally ran an incorrect rebase, and a vital hotfix is stuck on a abandoned branch. Your objective is to clean up this repository structure.
+
+## Practical Execution Tasks
+
+1. Run the `git log --graph --oneline --decorate --all` command to map out all branch locations.
+2. Locate and recover a lost commit using `git reflog`.
+3. Rebase your target feature branch onto the latest `main` branch state.
+4. Manually resolve the resulting rebase conflicts, then resume using `--continue`.
+5. Run an interactive rebase (`git rebase -i`) to squash small commits and clean up your log messages.
+6. Use `git cherry-pick` to bring over the isolated hotfix from the abandoned branch.
+7. Merge the polished feature branch into `main` using your team's integration strategy.
+8. Verify the final graph state and staging layout inside `lazygit`.
+9. Safely push the completed history up to the remote server using `--force-with-lease`.
+
+---
+
+\center
+
+\huge
+
+**Thank you!**
