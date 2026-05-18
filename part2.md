@@ -21,10 +21,10 @@ header-includes: |
 
 ## Recap from Part 1
 
-- **Commits**: Snapshots tracking cryptographic states with parent links.
+- **Commits**: Snapshots of repository state with hash id and parent links.
 - **Branches**: Lightweight, movable pointers to specific commits.
 - **`HEAD`**: Your current location indicator (where you are writing next).
-- **Remote Branches**: Read-only tracking pointers (e.g., `origin/main`).
+- **Remote-tracking Branches**: Local references that mirror remote branch tips after fetch/pull (e.g., `origin/main`).
 
 ## Core Key Insight
 
@@ -47,14 +47,14 @@ git log --graph --oneline --decorate --all
 ## Detached HEAD State
 
 **The Concept:**
-Checking out a specific commit instead of a branch decouples `HEAD`.
+Checking out a specific commit instead of a branch detaches `HEAD` from any branch name.
 
 ```bash
 git checkout abc1234  # HEAD now points directly to a commit
 
 ```
 
-> **Warning:** New commits created here are orphaned once you checkout another branch.
+> **Warning:** New commits created here can become unreachable from normal branch names once you checkout another branch.
 
 ### Quick Recovery Options
 
@@ -76,7 +76,7 @@ git checkout -b recovered-branch abc1234
 | --- | --- | --- |
 | **Branch** | `main`, `feature/login` | Moves forward dynamically with new commits |
 | **Tag** | `v1.0.0`, `release-2.0` | Static snapshot marker; never moves |
-| **Remote-tracking** | `origin/main` | Read-only mirror of remote state |
+| **Remote-tracking** | `origin/main` | Local mirror of remote state, updated by fetch/pull |
 | **Special** | `HEAD`, `MERGE_HEAD` | Internal operational pointers |
 
 ### Useful Reference Shortcuts
@@ -97,7 +97,9 @@ git checkout -b recovered-branch abc1234
 Target branch tip moves straight to source branch tip. No new commit is made.
 
 ```text
-Before: A---B---C (main) -> \ -> D---E (feature)
+Before: A---B---C (main)
+               \
+                D---E (feature)
 After:  A---B---C---D---E (main, feature)
 
 ```
@@ -119,7 +121,9 @@ After:  A---B---C-------F (main)
 Condenses all incoming changes into a single brand-new commit on the target branch.
 
 ```text
-Before: A---B---C (main) -> \ -> D---E---F (feature)
+Before: A---B---C (main)
+               \
+                D---E---F (feature)
 After:  A---B---C---G (main)
 
 ```
@@ -198,7 +202,7 @@ git rebase --continue
 
 ## Rebase Interruption Controls
 
-* `git rebase --continue` : Advance to next commit match after a resolution.
+* `git rebase --continue` : Continue replaying commits after a conflict resolution.
 * `git rebase --skip` : Drop the current conflicting commit entirely.
 * `git rebase --abort` : Instantly halt and return your branch to pre-rebase status.
 
@@ -208,7 +212,7 @@ git rebase --continue
 **Never rebase commits that have already been pushed to a shared public repository.**
 :::
 
-If forced to update a shared, rebased feature branch, bypass tracking mismatches safely:
+If you must update a remote branch after rebasing your own feature work, protect teammates' unseen commits:
 
 ```bash
 git push --force-with-lease  # Rejects push if remote has unseen changes
@@ -301,12 +305,8 @@ git cherry-pick abc1234
 ## Range and Automation Flags
 
 ```bash
-# Multi-commit cherry pick (from oldest up to newest, inclusive)
-git cherry-pick abc1234..xyz7890
-
-# Stage changes directly in working directory without creating a commit
-git cherry-pick --no-commit def5678
-
+# replay all commits that are ancestors of master but not of HEAD
+git cherry-pick ^HEAD master
 ```
 
 ---
@@ -324,7 +324,7 @@ Reflog tracks every single movement of `HEAD` and branch updates across your loc
 ## Key Mechanics
 
 * Reflog is entirely local; it never travels via `git push` or `git clone`.
-* Entries expire after a set time limit (the default safety period is 90 days).
+* Entries expire after configurable time limits; common defaults are 90 days for reachable entries and 30 days for unreachable ones.
 
 ## Essential Diagnostics
 
@@ -375,9 +375,9 @@ git stash
 git stash -u
 
 # Describe your stashed changes clearly
-git stash save "In-progress API refactor"
+git stash push -m "In-progress API refactor"
 
-# Restore the most recent stash and remove it from memory
+# Restore the most recent stash and remove it from the stash list
 git stash pop
 
 # Review all saved stash layers
@@ -466,7 +466,7 @@ lazygit
 # Fetch: Downloads remote updates without modifying local working tracks
 git fetch origin
 
-# Pull: Directly combines fetch and merge (can create a messy graph)
+# Pull: Combines fetch with merge or rebase, depending on configuration
 git pull
 
 # Clean Pull: Replays your local commits cleanly on top of incoming changes
@@ -593,7 +593,7 @@ jobs:
 
 ## Production Workflow Best Practices
 
-* **Explicit Pinning**: Use explicit version hashes or major tags (e.g., `actions/checkout@v4`) to avoid unexpected pipeline breaks.
+* **Explicit Pinning**: Use major tags for convenience (e.g., `actions/checkout@v4`) or full commit SHAs when you need stronger supply-chain control.
 * **Concurrency Controls**: Cancel older runs automatically when a developer pushes new updates to an active pull request:
 
 ```yaml
