@@ -13,9 +13,15 @@ PDF_FILES = $(filter-out $(BEAMER_FILES), $(MD_FILES))
 PDF_TARGETS = $(PDF_FILES:.md=.pdf)
 BEAMER_TARGETS = $(BEAMER_FILES:.md=.pdf)
 
-# Default target
-all: $(BEAMER_TARGETS) $(PDF_TARGETS)
+# Default target - only builds part2.pdf
+part2.pdf: part2.md
+	@echo "Building part2.pdf (beamer presentation)..."
+	@$(PANDOC) $(BEAMER_OPTS) -o $@ $<
 	@echo "Build success."
+
+# Build all PDFs (including README.md)
+all: $(BEAMER_TARGETS) $(PDF_TARGETS)
+	@echo "All PDFs built successfully."
 
 # Pattern rule for beamer presentations (like part2.md)
 %.pdf: %.md
@@ -27,27 +33,22 @@ all: $(BEAMER_TARGETS) $(PDF_TARGETS)
 	@echo "Building $@ from $< (regular PDF format)..."
 	@$(PANDOC) $(PDF_OPTS) -o $@ $<
 
-# Specific rule for part2.md (beamer)
-part2.pdf: part2.md
-	@echo "Building part2.pdf (beamer presentation)..."
-	@$(PANDOC) $(BEAMER_OPTS) -o $@ $<
-
 # Clean up generated files
 clean:
 	@rm -f *.pdf
 	@echo "Cleaned up all PDF files."
 
 # Phony targets
-.PHONY: all clean
+.PHONY: all clean help
 
 # Help target
 help:
 	@echo "Available targets:"
-	@echo "  all     - Build all PDF files (default)"
-	@echo "  clean   - Remove all generated PDF files"
-	@echo "  help    - Show this help message"
+	@echo "  (default) - Build only part2.pdf"
+	@echo "  all       - Build all PDF files (part2.pdf and README.pdf)"
+	@echo "  clean     - Remove all generated PDF files"
+	@echo "  help      - Show this help message"
 	@echo ""
 	@echo "Individual files can be built with:"
 	@echo "  make part2.pdf"
-	@echo "  make 01-mental-model.pdf"
-	@echo "  etc."
+	@echo "  make README.pdf"
