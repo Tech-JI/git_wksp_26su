@@ -442,6 +442,11 @@ lazygit
 
 ```
 
+---
+
+![Lazygit Main Interface](img/lazygit.png){width=0.9\textwidth}
+
+
 ## Primary Interface Sections
 
 1. **Status**: Shows current operational context, branch names, and upstream sync delays.
@@ -532,6 +537,11 @@ A **Fork** is an independent, server-side copy of a repository hosted under your
 
 ```
 
+---
+
+![Fork & Pull Request Ecosystem](img/PR.png){width=0.8\textwidth}
+
+
 ## Step-by-Step Fork Deployment
 
 ```bash
@@ -551,6 +561,11 @@ git push origin main
 git checkout -b feature/contribution
 
 ```
+
+---
+
+![Pull Request Review Interface](img/PR_Review.png){width=0.9\textwidth}
+
 
 
 
@@ -596,6 +611,11 @@ jobs:
           npm test
 
 ```
+
+---
+
+![GitHub Actions Workflow Execution](img/action.png){width=0.85\textwidth}
+
 
 ## Production Workflow Best Practices
 
