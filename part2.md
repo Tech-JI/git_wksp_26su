@@ -6,14 +6,24 @@ author:
 theme:
   - Copenhagen
 date:
-  - May 2025
+  - May 2026
 colorlinks: true
 linkcolor: .
 urlcolor: blue
 header-includes: |
-  \setbeamertemplate{headline}{}
-  \lstset{basicstyle=\ttfamily,frame=single,frameround=tttt,columns=fullflexible,keepspaces=true,backgroundcolor=\color{yellow!20}}
+  \usepackage{fvextra}
+  \usepackage{listings}
+  \usepackage{geometry}
+  \geometry{left=0.8cm,right=0.8cm,top=0cm,bottom=1.5cm,headheight=2.25ex,headsep=0pt}
+  \setbeamertemplate{navigation symbols}{}
+  \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,breakanywhere,commandchars=\\\{\},fontsize=\scriptsize,leftmargin=0pt,rightmargin=0pt}
+  \lstset{basicstyle=\ttfamily\scriptsize,frame=single,frameround=tttt,columns=fullflexible,keepspaces=true,backgroundcolor=\color{yellow!20},breaklines=true,breakatwhitespace=false,xleftmargin=2pt,xrightmargin=2pt,aboveskip=2pt,belowskip=2pt}
+  \renewcommand{\baselinestretch}{0.95}
+  \setbeamertemplate{headline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=\paperwidth,ht=2.25ex,dp=1ex,center]{section in head/foot}\usebeamerfont{section in head/foot}\insertsectionhead\end{beamercolorbox}}\vskip0pt}
+  \setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\usebeamerfont{author in head/foot}\insertshortauthor\end{beamercolorbox}\begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}\usebeamerfont{title in head/foot}\insertshorttitle\end{beamercolorbox}\begin{beamercolorbox}[wd=.333333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}\usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{2em}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}\end{beamercolorbox}}\vskip0pt}
+
 ---
+
 
 \tableofcontents
 
@@ -50,8 +60,8 @@ git log --graph --oneline --decorate --all
 Checking out a specific commit instead of a branch detaches `HEAD` from any branch name.
 
 ```bash
-git checkout abc1234  # HEAD now points directly to a commit
-
+git checkout abc1234
+# HEAD now points directly to a commit
 ```
 
 > **Warning:** New commits created here can become unreachable from normal branch names once you checkout another branch.
@@ -79,6 +89,9 @@ git checkout -b recovered-branch abc1234
 | **Remote-tracking** | `origin/main` | Local mirror of remote state, updated by fetch/pull |
 | **Special** | `HEAD`, `MERGE_HEAD` | Internal operational pointers |
 
+
+---
+
 ### Useful Reference Shortcuts
 
 * `HEAD~1` or `HEAD^` : Direct parent of current commit
@@ -86,7 +99,6 @@ git checkout -b recovered-branch abc1234
 * `main~3` : Three commits back from the tip of the main branch
 * `origin/main@{yesterday}` : State of the tracking branch 24 hours ago
 
----
 
 # 2. Merge Strategies and Team Integration
 
@@ -104,17 +116,6 @@ After:  A---B---C---D---E (main, feature)
 
 ```
 
-### Three-Way Merge (`--no-ff`)
-
-Forces a dedicated merge commit, explicitly preserving historical feature context.
-
-```text
-Before: A---B---C (main) -> \ -> D---E (feature)
-After:  A---B---C-------F (main)
-                 \     /
-                  D---E   (feature)
-
-```
 
 ### Squash Merge (`--squash`)
 
@@ -127,6 +128,8 @@ Before: A---B---C (main)
 After:  A---B---C---G (main)
 
 ```
+
+---
 
 ## Decision Strategy Matrix
 
@@ -161,7 +164,6 @@ git merge --no-ff feature-branch  # Guarantees a merge node
 
 ```
 
----
 
 # 3. Rebase for Clean Feature Branches
 
@@ -219,7 +221,6 @@ git push --force-with-lease  # Rejects push if remote has unseen changes
 
 ```
 
----
 
 # 4. Interactive Rebase: Editing Local History
 
@@ -235,6 +236,11 @@ git rebase -i HEAD~4
 
 ## Command Directives Reference
 
+\begingroup
+\scriptsize
+\renewcommand{\arraystretch}{0.85}
+\setlength{\tabcolsep}{4pt}
+\arrayrulewidth=0.4pt
 | Directive | Alias | Intended Outcome |
 | --- | --- | --- |
 | **`pick`** | `p` | Keep the commit exactly as it is |
@@ -243,6 +249,7 @@ git rebase -i HEAD~4
 | **`squash`** | `s` | Combine changes into previous commit, merging messages |
 | **`fixup`** | `f` | Combine changes into previous commit, discarding this message |
 | **`drop`** | `d` | Erase this specific commit completely from history |
+\endgroup
 
 ## Common History Edits
 
@@ -257,6 +264,7 @@ f    def5678 Fix layout typo
 f    ghi9012 Add input verification rules
 
 ```
+---
 
 ### Workflow 2: Splitting a Monolithic Commit
 
@@ -278,7 +286,6 @@ git rebase --continue
 
 ```
 
----
 
 # 5. Cherry-Pick: Moving Selected Commits
 
@@ -309,7 +316,6 @@ git cherry-pick abc1234
 git cherry-pick ^HEAD master
 ```
 
----
 
 # 6. Git Reflog: Recovery and Repair
 
@@ -343,10 +349,11 @@ git reflog
 ### Scenario A: Accidental Hard Reset Recovery
 
 ```bash
-# Recover from an accidental destructive command like: git reset --hard HEAD~3
-git reflog
+# Recover from an accidental destructive command like: 
+    git reset --hard HEAD~3
+    git reflog
 # Identify pre-reset snapshot state hash (e.g., HEAD@{1})
-git reset --hard HEAD@{1}
+    git reset --hard HEAD@{1}
 
 ```
 
@@ -359,7 +366,6 @@ git branch feature-restored HEAD@{2}
 
 ```
 
----
 
 # 7. Stash, Worktrees, and Partial Staging
 
@@ -377,7 +383,7 @@ git stash -u
 # Describe your stashed changes clearly
 git stash push -m "In-progress API refactor"
 
-# Restore the most recent stash and remove it from the stash list
+# Restore the most recent stash
 git stash pop
 
 # Review all saved stash layers
@@ -418,7 +424,7 @@ git add -p  # Evaluates code block hunks sequentially
 * `s` : Split the current hunk into even smaller evaluation pieces.
 * `q` : Exit immediately; preserve current staging configuration.
 
----
+
 
 # 8. Lazygit: Visual Terminal Workflow
 
@@ -454,7 +460,7 @@ lazygit
 * `z` : Trigger an immediate undo step for the last operation.
 * `Esc` or `q` : Step back / Exit the interface.
 
----
+
 
 # 9. Remote Collaboration Policies
 
@@ -497,7 +503,7 @@ Sample Output:
 * Avoid raw `git push --force`. Always protect your upstream target lines by using `git push --force-with-lease`.
 * **Prohibited Action**: Never execute history rewrites or force-pushes on long-lived default branches (e.g., `main`, `master`, `develop`).
 
----
+
 
 # 10. Fork and Pull Request Workflow
 
@@ -546,7 +552,7 @@ git checkout -b feature/contribution
 
 ```
 
----
+
 
 # 11. GitHub Actions: Automation Basics
 
@@ -603,7 +609,7 @@ concurrency:
 
 ```
 
----
+
 
 # 12. Capstone Exercise: Clean Up a Messy Team Repository
 

@@ -12,7 +12,7 @@ Tech GC
 - [ ] Beautify interface (formatting, layout, visual elements)
 - [ ] Add practice exercises to the `Exercise/` folder
 - [ ] Add relevant images and diagrams
-- [ ] Complete "How to Compile" documentation
+- [x] Complete "How to Compile" documentation
 - [ ] Review and supplement command examples
 - [ ] Add more practical scenarios and use cases
 - [ ] Include lazygit shortcuts reference
