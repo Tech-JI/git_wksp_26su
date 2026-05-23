@@ -8,15 +8,15 @@ Tech GC
 ## To Do List
 
 - [x] Organize workshop structure based on the framework
-- [ ] Refine and improve content for each section
-- [ ] Beautify interface (formatting, layout, visual elements)
-- [ ] Add practice exercises to the `Exercise/` folder
-- [ ] Add relevant images and diagrams
+- [x] Refine and improve content for each section
+- [x] Beautify interface (formatting, layout, visual elements)
+- [x] Add practice exercises to the `Exercise/` folder
+- [x] Add relevant images and diagrams
 - [x] Complete "How to Compile" documentation
-- [ ] Review and supplement command examples
-- [ ] Add more practical scenarios and use cases
-- [ ] Include lazygit shortcuts reference
-- [ ] Verify all code examples and commands
+- [x] Review and supplement command examples
+- [x] Add more practical scenarios and use cases
+- [x] Include lazygit shortcuts reference
+- [x] Verify all code examples and commands
 
 ## How to Compile
 
