@@ -66,16 +66,26 @@ git checkout abc1234
 
 > **Warning:** New commits created here can become unreachable from normal branch names once you checkout another branch.
 
+---
+
 ### Quick Recovery Options
 
+The safest move is to give the detached state a name *before* you leave it:
+
 ```bash
-# Save state immediately
+# Save state immediately by creating a branch from where you are
 git checkout -b new-branch-name
 
-# Recover after accidentally leaving
-git reflog
-git checkout -b recovered-branch abc1234
+```
 
+> **Tip:** We will come back to deeper recovery (e.g., when you have already switched away) in Section 6 "Git Reflog".
+
+### A Tiny Example
+
+```bash
+git checkout abc1234        # HEAD detaches
+# ... experimental commit X ...
+git checkout -b try-x       # X is now safely on branch "try-x"
 ```
 
 ## Understanding References
@@ -102,30 +112,65 @@ git checkout -b recovered-branch abc1234
 
 # 2. Merge Strategies and Team Integration
 
+## How git merge Actually Works
+
+Before talking about *strategies*, it helps to understand the **underlying algorithm**.
+
+Almost every `git merge` is a **three-way merge**: Git finds the *merge base* (latest common ancestor of the two branches) and combines changes from both sides relative to that base.
+
+```text
+        A---B---C   (main)
+         \
+          D---E    (feature)
+
+Merge base: A
+"Left side"  changes : A -> C
+"Right side" changes : A -> E
+Three-way merge combines both onto the result.
+```
+
+> **Key idea:** Whether the result is a *fast-forward*, a *no-ff merge commit*, or a *squashed* single commit is a question of **how the result is recorded**, not which algorithm is used.
+
 ## Integration Choices Overview
 
 ### Fast-Forward Merge (`--ff`)
 
-Target branch tip moves straight to source branch tip. No new commit is made.
+When the target branch has not moved since the source branch started, no actual three-way combination is needed. Git simply slides the branch pointer forward.
 
 ```text
 Before: A---B---C (main)
-               \
-                D---E (feature)
+                 \
+                  D---E (feature)
 After:  A---B---C---D---E (main, feature)
 
 ```
 
+---
 
-### Squash Merge (`--squash`)
+### No-Fast-Forward Merge (`--no-ff`)
 
-Condenses all incoming changes into a single brand-new commit on the target branch.
+Forces a real merge commit even when fast-forward is possible. The feature branch stays visible as a "bubble" in the graph.
 
 ```text
 Before: A---B---C (main)
-               \
-                D---E---F (feature)
-After:  A---B---C---G (main)
+                 \
+                  D---E (feature)
+After:  A---B---C-------M (main)
+                 \     /
+                  D---E   (feature)
+```
+
+---
+
+### Squash Merge (`--squash`)
+
+Condenses all incoming changes into a single brand-new commit on the target branch. The feature branch history is *not* recorded on `main`.
+
+```text
+Before: A---B---C (main)
+                 \
+                  D---E---F (feature)
+After:  A---B---C---G (main)        # G = D+E+F squashed
 
 ```
 
@@ -135,10 +180,12 @@ After:  A---B---C---G (main)
 
 | Strategy | Best Use Case | History Style | Extra Commit? |
 | --- | --- | --- | --- |
-| **Fast-Forward** | Short-lived linear branches | Seamless line | No |
-| **Three-Way** | Shared/Long-lived branches | Topological | Yes |
-| **`--no-ff`** | Strict Feature/PR tracking | Grouped graph | Yes |
-| **Squash** | Noisy local feature commits | Compact line | Yes |
+| **Fast-Forward** (`--ff`) | Short-lived linear branches | Seamless line | No |
+| **No-FF** (`--no-ff`) | Strict Feature/PR tracking | Grouped graph (bubble) | Yes (merge commit) |
+| **Squash** (`--squash`) | Noisy local feature commits | Compact line | Yes (squashed commit) |
+| **Rebase + Merge** | Want clean linear history but main moved | Seamless line | Optional |
+
+> All four are powered by the same three-way merge engine — they only differ in **what kind of commit (if any) is produced**.
 
 ## Team Integration Workflows
 
@@ -164,6 +211,33 @@ git merge --no-ff feature-branch  # Guarantees a merge node
 
 ```
 
+## Worked Example
+
+Suppose `main` has commits `A-B-C` and your `feature` branch has `D-E` branched from `B`.
+
+```bash
+# Snapshot 1: fast-forward not possible (main has C after B)
+$ git checkout main
+$ git merge feature          # creates merge commit M
+# Result: A-B-C-M, with feature D-E pointing into M
+
+# Snapshot 2: with --squash
+$ git merge --squash feature
+$ git commit -m "feat: add feature X"
+# Result: A-B-C-G (single squashed commit, feature branch unchanged)
+
+# Snapshot 3: with rebase first, then merge
+$ git checkout feature && git rebase main   # D,E -> D',E' on top of C
+$ git checkout main && git merge feature    # fast-forward to E'
+# Result: A-B-C-D'-E' (clean linear)
+```
+
+## Discussion Questions
+
+* Which result is easiest to revert if the feature breaks production?
+* Which result is easiest for a *new* reader of the project history?
+* Which result hides the fact that a feature branch ever existed?
+
 
 # 3. Rebase for Clean Feature Branches
 
@@ -174,8 +248,8 @@ Rebase updates the starting parent commit of your branch, replaying your local c
 ```text
 Before Rebase:
 A---B---C  (main)
-         \
-          D---E  (feature)
+     \
+      D---E  (feature)
 
 After 'git rebase main':
 A---B---C  (main)
@@ -208,6 +282,19 @@ git rebase --continue
 * `git rebase --skip` : Drop the current conflicting commit entirely.
 * `git rebase --abort` : Instantly halt and return your branch to pre-rebase status.
 
+## Why One Rebase Can Stop Multiple Times
+
+Each replayed commit is applied **on top of the new base** in order. If commit `D` touches the same lines as recent main changes, you resolve once. If commit `E` *also* touches those lines, you resolve again. Each resolution is per-commit, not per-rebase.
+
+```text
+Rebase plan: D -> E onto C
+[step 1/2] applying D ...        CONFLICT in src/api.ts
+   ->  fix, git add, git rebase --continue
+[step 2/2] applying E ...        CONFLICT in src/api.ts
+   ->  fix, git add, git rebase --continue
+Successfully rebased and updated refs/heads/feature.
+```
+
 ## The Cardinal Rule of Rebase
 
 :::center
@@ -221,12 +308,32 @@ git push --force-with-lease  # Rejects push if remote has unseen changes
 
 ```
 
+## Try It: Mini Rebase Drill
+
+```bash
+# Setup
+git init demo && cd demo
+echo "v1" > a.txt && git add . && git commit -m "init"
+git checkout -b feature
+echo "feature-line" >> a.txt && git commit -am "feat: add line"
+git checkout main
+echo "main-line"    >> a.txt && git commit -am "fix: hotfix"
+
+# Now rebase feature onto main and resolve the conflict
+git checkout feature
+git rebase main
+# Edit a.txt to keep both lines, then:
+git add a.txt && git rebase --continue
+git log --graph --oneline --all
+```
+
 
 # 4. Interactive Rebase: Editing Local History
 
 ## Complete Control Over Commits
 
 Interactive rebase (`git rebase -i`) acts as a local history editor before pushing your updates up to code review.
+
 
 ```bash
 # Open interactive configuration for the last 4 commits
@@ -283,15 +390,64 @@ git add component_b.js && git commit -m "Profile Part 2: Interface"
 
 # 4. Resume the rebase chain
 git rebase --continue
-
 ```
+
+---
+
+### Workflow 3: Reordering Commits
+
+Sometimes the *story* of the branch matters: tests first, then implementation. Just rearrange the lines in the todo editor.
+
+```text
+# Before                            # After (just reorder pick lines)
+pick a1 feat: add login impl        pick c3 test: add login tests
+pick b2 fix: small typo             pick a1 feat: add login impl
+pick c3 test: add login tests       pick b2 fix: small typo
+```
+
+> If a reorder produces a conflict, treat it like a normal rebase conflict: resolve, `git add`, `git rebase --continue`.
+
+## Try It: Clean a Messy Branch
+
+```bash
+# Setup a messy branch
+git init demo-irebase && cd demo-irebase
+echo "v1" > app.txt && git add . && git commit -m "init"
+echo "feat" >> app.txt && git commit -am "Add featurex"     # bad msg
+echo "fix" >> app.txt && git commit -am "WIP"                # bad msg
+echo "fix" >> app.txt && git commit -am "fixup typo"         # noise
+
+# Now clean it up in one rebase
+git rebase -i HEAD~3
+#   reword Add featurex        -> "feat: add feature X"
+#   reword WIP                 -> "feat: continue feature X"
+#   fixup  fixup typo
+```
+
+## Safety Notes
+
+* Interactive rebase **rewrites commit IDs**. Use it freely on private local work.
+* Be careful after pushing — coordinate with teammates or use `--force-with-lease`.
+* If something goes wrong, `git reflog` is your safety net (Section 6).
 
 
 # 5. Cherry-Pick: Moving Selected Commits
 
 ## Targeting Specific Commits
 
-Cherry-pick isolates single commits from other timelines and applies them directly on top of your current branch.
+Cherry-pick isolates single commits from other timelines and applies them directly on top of your current branch. The applied commit gets a **new hash** (different parent), so the original is *copied*, not moved.
+
+```text
+Before:
+A---B---C (main, HEAD)
+     \
+      D---E---F (feature)
+
+After 'git cherry-pick E':
+A---B---C---E' (main, HEAD)
+     \
+      D---E---F  (feature, unchanged)
+```
 
 :::center
 **"I need this precise fix, without merging that entire unfinished branch."**
@@ -312,9 +468,42 @@ git cherry-pick abc1234
 ## Range and Automation Flags
 
 ```bash
-# replay all commits that are ancestors of master but not of HEAD
+# Single commit
+git cherry-pick abc1234
+
+# Inclusive range (oldest^..newest, both ends included)
+git cherry-pick abc1234^..def5678
+
+# Replay all commits reachable from master but not from HEAD
 git cherry-pick ^HEAD master
+
+# Stage changes without committing — lets you edit before commit
+git cherry-pick -n abc1234
+
+# Conflict controls
+git cherry-pick --continue
+git cherry-pick --abort
+git cherry-pick --skip
 ```
+
+## Worked Example: Backporting a Bug Fix
+
+```bash
+# main has moved on; v1.x is a long-lived release branch
+$ git log --oneline main -3
+e1f2a3b fix: null pointer in parser          <-- we want this on v1.x
+a7c8d9e feat: rewrite parser engine
+b3c4d5e feat: new config format
+
+$ git checkout v1.x
+$ git cherry-pick e1f2a3b
+# If parser.c diverged a lot, you may hit conflicts:
+#   fix the file, then:
+$ git add parser.c
+$ git cherry-pick --continue
+```
+
+> **Gotcha:** Repeated cherry-picks of the same change across long-lived branches can create *duplicate-looking* commits with different hashes. When you eventually merge, Git usually handles it — but reviewers may be confused. Reference the original commit hash in the message to leave a trail.
 
 
 # 6. Git Reflog: Recovery and Repair
@@ -366,6 +555,42 @@ git branch feature-restored HEAD@{2}
 
 ```
 
+---
+
+### Scenario C: Undoing a Bad Rebase
+
+```bash
+# You just rebased, and the result is wrong.
+git reflog
+#   abc1234 HEAD@{0}: rebase finished: returning to refs/heads/feature
+#   def5678 HEAD@{1}: rebase: pick "feat: add login"
+#   ...
+#   1a2b3c4 HEAD@{5}: checkout: moving from main to feature   <-- pre-rebase state
+git reset --hard HEAD@{5}
+```
+
+### Scenario D: Recovering an Amended-Away Commit
+
+```bash
+git commit --amend -m "oops, lost the original message"
+# Original commit is unreachable but still in reflog
+git reflog show HEAD
+# 9f8e7d6 HEAD@{1}: commit: original useful message
+git show 9f8e7d6                      # inspect
+git cherry-pick 9f8e7d6               # bring it back
+```
+
+## Safety Rule of Thumb
+
+:::center
+**When unsure, create a rescue branch FIRST. Branches are free; lost commits are not.**
+:::
+
+```bash
+git switch -c rescue HEAD@{1}   # snapshot the suspicious state to a branch
+# now you can experiment without fear
+```
+
 
 # 7. Stash, Worktrees, and Partial Staging
 
@@ -383,17 +608,44 @@ git stash -u
 # Describe your stashed changes clearly
 git stash push -m "In-progress API refactor"
 
-# Restore the most recent stash
+# Restore the most recent stash (and drop it from the stack)
 git stash pop
+
+# Apply without dropping
+git stash apply stash@{1}
 
 # Review all saved stash layers
 git stash list
 
+# Drop a specific stash entry
+git stash drop stash@{0}
+```
+
+## Real-World Scenario: The Surprise Hotfix
+
+```bash
+# Working on a half-finished feature when an urgent bug report lands
+$ git status
+On branch feature/profile
+Changes not staged for commit:
+  modified:   src/profile.tsx
+  modified:   src/api/user.ts
+
+$ git stash push -m "WIP: profile UI redesign"
+Saved working directory and index state On feature/profile: WIP: profile UI redesign
+
+# Switch, fix, ship
+$ git switch main && git switch -c hotfix/login-crash
+# ... fix, commit, PR ...
+
+# Back to feature
+$ git switch feature/profile
+$ git stash pop                       # restores the modifications
 ```
 
 ## Git Worktree: Multi-Branch Environments
 
-Check out multiple branches of the same repository simultaneously in separate directories.
+Check out multiple branches of the same repository simultaneously in separate directories. Unlike `stash`, your files stay where they are — you just open a *second* working directory pointing at a different branch.
 
 :::center
 **Review a PR or execute a hotfix without interrupting or clearing your active workspace.**
@@ -403,18 +655,29 @@ Check out multiple branches of the same repository simultaneously in separate di
 # Mount a separate branch into a sibling directory
 git worktree add ../project-hotfix hotfix/api-bug
 
+# See all active worktrees
+git worktree list
+
 # Safely tear down directory after finishing the fix
 git worktree remove ../project-hotfix
-
 ```
+
+---
+
+## Stash vs Worktree: When to Use Which?
+
+| Use stash when... | Use worktree when... |
+| --- | --- |
+| Interruption is short (minutes) | Interruption is long (hours/days) |
+| You just need to switch branch and come back | You need to *run* both branches side-by-side (e.g., diff servers) |
+| Single working tree is enough | You want IDE windows open on two branches |
 
 ## Partial Staging (Patch Mode)
 
-Interactively break down changes within a single modified file into distinct commits.
+Interactively break down changes within a single modified file into distinct commits — invaluable when one editing session accidentally mixed two unrelated fixes.
 
 ```bash
 git add -p  # Evaluates code block hunks sequentially
-
 ```
 
 ### Quick Response Map
@@ -422,7 +685,29 @@ git add -p  # Evaluates code block hunks sequentially
 * `y` : Stage this code hunk.
 * `n` : Skip staging this code hunk.
 * `s` : Split the current hunk into even smaller evaluation pieces.
+* `e` : Manually edit the hunk before staging.
 * `q` : Exit immediately; preserve current staging configuration.
+
+---
+
+### Example Flow
+
+```text
+$ git diff src/utils.ts
+@@ -10,3 +10,8 @@ function formatDate(d) { ... }
++function formatTime(t) { ... }          <-- belongs to "feat: time"
+@@ -34,1 +39,2 @@
+-  return null;
++  return undefined;                       <-- belongs to "fix: nullish"
+
+$ git add -p src/utils.ts
+Stage this hunk [y,n,q,a,d,s,e,?]? y     # stage formatTime
+Stage this hunk [y,n,q,a,d,s,e,?]? n     # skip nullish fix
+$ git commit -m "feat: add formatTime helper"
+$ git add -p src/utils.ts
+Stage this hunk [y,n,q,a,d,s,e,?]? y
+$ git commit -m "fix: return undefined instead of null"
+```
 
 
 
@@ -449,21 +734,122 @@ lazygit
 
 ## Primary Interface Sections
 
-1. **Status**: Shows current operational context, branch names, and upstream sync delays.
-2. **Files**: Lists local changes with instant staging controls.
-3. **Branches**: Displays local tracks, remotes, and structural tags.
-4. **Commits**: Visualizes the commit graph history.
-5. **Staging / Diff Main Panel**: Shows line-by-line diff tracking.
+The interface is split into a **side panel stack** (left) and a **main viewport** (right). Each side panel maps to a numbered shortcut (`1`–`5`).
+
+1. **`[1]` Status**: current repo & branch, ahead/behind indicators.
+2. **`[2]` Files**: working tree, staged/unstaged diffs, conflicts.
+3. **`[3]` Local branches**: switch, merge, rebase, fast-forward.
+4. **`[4]` Commits / Reflog**: graph history & undo timeline.
+5. **`[5]` Stash**: stash list with apply / pop / drop.
+
+---
+
+## Side Panel
+
+The upper side panel gives an overview of the current repository state, including the active branch, its status, and any pending changes.
+
+![Side panels: Status, Files, Branches](img/lazygit-panels-left.png){width=0.25\textwidth}
+
+---
+
+## Branches Panel
+
+Press `3` to focus this panel.
+
+![Branches view: switch, merge, rebase from here](img/lazygit-branches.png){width=0.4\textwidth}
+
+---
+
+## Branch Operations Cheat Sheet
+
+| Key | Action |
+| --- | --- |
+| `space` | Checkout the highlighted branch |
+| `n` | Create a new branch from current |
+| `M` | Merge into current branch |
+| `r` | Rebase current branch onto highlighted |
+| `d` | Delete branch |
+| `f` | Fast-forward without checkout |
+
+---
+
+## Commits Panel & Interactive Rebase
+
+Press `4` to enter the commits panel. This is where lazygit shines for **rewriting history**.
+
+![Commits / Reflog view: history rewriting & cherry-pick from here](img/lazygit-commits.png){width=0.55\textwidth}
+
+---
+
+## Commits Panel Operations Cheat Sheet
+
+| Key | Action |
+| --- | --- |
+| `space` | Checkout commit (detached HEAD) |
+| `e` / `r` | `edit` / `reword` this commit (interactive rebase) |
+| `s` / `f` | `squash` / `fixup` into the commit below |
+| `d` | `drop` this commit |
+| `p` | `pick` (revert a drop) |
+| `c` | Cherry-pick selected commit(s) |
+| `g` | Reset (soft/mixed/hard) to commit |
+| `Ctrl+j` / `Ctrl+k` | Move commit down / up (reorder) |
+
+> Lazygit performs every action as a real Git command — press `@` to toggle the **command log** and watch the underlying `git rebase --interactive ...` invocation.
+
+---
+
+## Diff / Log Main Viewport
+
+The right pane reflects whatever the active side panel selected — useful for reading commits, diffs, or staging hunks line-by-line.
+
+![Main viewport showing commit log of the selected branch](img/lazygit-log.png){width=0.9\textwidth}
+
+---
+
+When the **Files** panel is focused, `space` here stages an individual file, hunk, or even a single line. Press `Enter` on a modified file to drop into hunk-level review:
+
+```text
+        [Files panel]               [Diff viewport]
+   M  src/api/auth.ts        |  @@ -42,7 +42,7 @@
+   ?? notes.todo             |  -    return token;
+                             |  +    return signedToken;
+                             |       }
+```
+
+---
+
+## Command Log: The Educational Window
+
+Press `@` (or look at the bottom panel) to see exactly what Git command lazygit just ran.
+
+![Command log: see the actual Git commands lazygit runs](img/lazygit-cmdlog.png){width=0.9\textwidth}
+
+> **Why this matters**: lazygit is a *teacher*, not just a tool. Every shortcut maps to a real `git ...` invocation — read along to internalize the CLI.
+
+---
+
+## Common Operations Cheat Sheet
+
+| Workflow | Lazygit Keys | Underlying Git |
+| --- | --- | --- |
+| Stage all & commit | Files → `a`, then `c` | `git add . && git commit` |
+| Amend last commit | Files → `A` | `git commit --amend --no-edit` |
+| Squash commits | Commits → `s` × N | `git rebase -i HEAD~N` |
+| Cherry-pick range | Commits → `Shift+c` then `Shift+v` on target | `git cherry-pick A^..B` |
+| Resolve conflict | Files → `Enter` on conflicted file | manual edit + `git add` |
+| Force-with-lease push | Branches → `P` then confirm | `git push --force-with-lease` |
+| Recover from oops | `4` → tab to **Reflog** → `space` | `git reset --hard HEAD@{n}` |
 
 ## Navigation Basics
 
-* `k` / `j` or Arrows : Move up and down within active panels.
-* `H` / `L` or Left/Right Arrows : Cycle between different panels.
-* `Space` : Toggle staging for a file, hunk, or single line.
-* `c` : Open the commit message interface.
-* `y` : Toggle the command output window to inspect the underlying Git commands.
-* `z` : Trigger an immediate undo step for the last operation.
-* `Esc` or `q` : Step back / Exit the interface.
+* `k` / `j` or arrows : Move up and down within active panels.
+* `H` / `L` or `Tab` : Cycle between panels.
+* `Space` : Toggle staging for a file / hunk / single line.
+* `c` : Open the commit message editor.
+* `@` : Toggle the command log window.
+* `z` : Undo last operation (`git reset` to a reflog entry).
+* `?` : Open the contextual help for the current panel.
+* `Esc` or `q` : Step back / exit the interface.
 
 
 
@@ -482,8 +868,10 @@ git pull
 
 # Clean Pull: Replays your local commits cleanly on top of incoming changes
 git pull --rebase
-
 ```
+
+> `git pull` = `git fetch` + `git merge` (default) or `git rebase` (with `--rebase`).
+> Fetch first when you want to *inspect* before integrating.
 
 ## Tracking Verification
 
@@ -493,20 +881,32 @@ git push -u origin feature/auth
 
 # Inspect tracking health and divergence distances
 git branch -vv
-
 ```
+
 
 ```text
 Sample Output:
 * main         abc1234 [origin/main] Fix memory leak
   feature/auth def5678 [origin/feature/auth: ahead 1, behind 2] Update tokens
-
 ```
+
+* `ahead N` : you have N commits the remote does not.
+* `behind N`: the remote has N commits you do not.
+* Both ahead **and** behind : the branch has *diverged* — a plain `git pull` will produce a merge commit unless you `--rebase`.
 
 ## Core Safety Controls
 
 * Avoid raw `git push --force`. Always protect your upstream target lines by using `git push --force-with-lease`.
 * **Prohibited Action**: Never execute history rewrites or force-pushes on long-lived default branches (e.g., `main`, `master`, `develop`).
+* Configure branch **protection rules** on the server (require PRs, status checks, signed commits) so policy is enforced, not just remembered.
+
+## Team Policy Checklist
+
+* [x] Protected `main` / `master` / `dev` (no direct push).
+* [x] All work on feature branches; PRs required.
+* [x] Local noisy commits rebased or squashed *before* review.
+* [x] `--force-with-lease`, never plain `--force` on shared remotes.
+* [x] Ask before rewriting any branch a teammate is using.
 
 
 
@@ -546,10 +946,10 @@ A **Fork** is an independent, server-side copy of a repository hosted under your
 
 ```bash
 # Step 1: Clone your personal fork
-git clone [https://github.com/YOUR_USERNAME/repository.git](https://github.com/YOUR_USERNAME/repository.git)
+git clone https://github.com/YOUR_USERNAME/repository.git
 
 # Step 2: Establish connection to the original project
-git remote add upstream [https://github.com/ORIGINAL_OWNER/repository.git](https://github.com/ORIGINAL_OWNER/repository.git)
+git remote add upstream https://github.com/ORIGINAL_OWNER/repository.git
 
 # Step 3: Synchronize with upstream changes before starting new work
 git checkout main
@@ -560,7 +960,22 @@ git push origin main
 # Step 4: Work on your isolated feature track
 git checkout -b feature/contribution
 
+# Step 5: Push and open a PR on the upstream repository
+git push -u origin feature/contribution
+# Then click "Compare & pull request" on GitHub
 ```
+
+## Keeping the Fork Healthy
+
+```bash
+# Periodically sync main with upstream so your PRs branch from the latest base
+git fetch upstream
+git checkout main
+git merge --ff-only upstream/main   # fail loudly if main diverged
+git push origin main
+```
+
+> **Tip:** Always branch new feature work from a *freshly synced* `main`. Diverged forks lead to messy PR diffs.
 
 ---
 
@@ -609,7 +1024,6 @@ jobs:
         run: |
           npm ci
           npm test
-
 ```
 
 ---
