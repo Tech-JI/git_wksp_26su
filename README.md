@@ -715,39 +715,28 @@ lazygit
 The `Exercise/` folder contains hands-on practice materials for workshop participants.
 
 ### Current Status
-- [ ] Add Section 1 exercises: Mental Model and Commits
-- [ ] Add Section 2 exercises: Merge Strategies
-- [ ] Add Section 3 exercises: Rebase Workflows
-- [ ] Add Section 4 exercises: Interactive Rebase
-- [ ] Add Section 5 exercises: Cherry-Pick
-- [ ] Add Section 6 exercises: Reflog Recovery
-- [ ] Add Section 7 exercises: Stash and Worktrees
-- [ ] Add Section 8 exercises: Lazygit Practice
-- [ ] Add Section 9-10 exercises: Remote Collaboration
-- [ ] Add Capstone exercise files
+- [x] Add Section 1 exercises: Mental Model and Commits
+- [x] Add Section 2 exercises: Merge Strategies
+- [x] Add Section 3 exercises: Rebase Workflows
+- [x] Add Section 4 exercises: Interactive Rebase
+- [x] Add Section 5 exercises: Cherry-Pick
+- [x] Add Section 6 exercises: Reflog Recovery
+- [x] Add Section 7 exercises: Stash and Worktrees
+- [x] Add Section 8 exercises: Lazygit Practice
+- [x] Add Capstone exercise files
 
-### Folder Structure (Planned)
+### Folder Structure
 ```
 Exercise/
 ├── 01-mental-model/
-│   ├── setup.sh
-│   └── instructions.md
 ├── 02-merge-strategies/
-│   ├── setup.sh
-│   └── instructions.md
 ├── 03-rebase-workflows/
-│   └── ...
 ├── 04-interactive-rebase/
-│   └── ...
 ├── 05-cherry-pick/
 ├── 06-reflog-recovery/
 ├── 07-stash-worktrees/
 ├── 08-lazygit-practice/
-├── 09-remote-collab/
-├── 10-fork-pr-workflow/
 └── capstone/
-    ├── scenario.md
-    └── solution/
 ```
 
 ### For Contributors
@@ -764,16 +753,16 @@ When adding exercises:
 Visual elements enhance understanding of Git concepts. This section tracks planned images and diagrams.
 
 ### Planned Images
-- [ ] Git commit graph diagrams (Section 1)
-- [ ] Merge strategy illustrations (Section 2)
-- [ ] Rebase workflow diagrams (Section 3)
-- [ ] Interactive rebase todo list examples (Section 4)
-- [ ] Cherry-pick visual explanation (Section 5)
-- [ ] Reflog timeline visualization (Section 6)
-- [ ] Worktree diagram (Section 7)
-- [ ] Lazygit interface screenshots (Section 8)
-- [ ] Fork/PR workflow diagram (Section 10)
-- [ ] GitHub Actions workflow example (Section 11)
+- [x] Git commit graph diagrams (Section 1)
+- [x] Merge strategy illustrations (Section 2)
+- [x] Rebase workflow diagrams (Section 3)
+- [x] Interactive rebase todo list examples (Section 4)
+- [x] Cherry-pick visual explanation (Section 5)
+- [x] Reflog timeline visualization (Section 6)
+- [x] Worktree diagram (Section 7)
+- [x] Lazygit interface screenshots (Section 8)
+- [x] Fork/PR workflow diagram (Section 10)
+- [x] GitHub Actions workflow example (Section 11)
 
 ### Image Guidelines
 - Use Mermaid diagrams where possible for consistency
