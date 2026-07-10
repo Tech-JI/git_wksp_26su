@@ -1066,25 +1066,6 @@ concurrency:
 ```
 
 
-
-# 12. Capstone Exercise: Clean Up a Messy Team Repository
-
-## The Scenario
-
-Your team is preparing a release. The development branches are cluttered with repetitive, unverified commits, someone accidentally ran an incorrect rebase, and a vital hotfix is stuck on a abandoned branch. Your objective is to clean up this repository structure.
-
-## Practical Execution Tasks
-
-1. Run the `git log --graph --oneline --decorate --all` command to map out all branch locations.
-2. Locate and recover a lost commit using `git reflog`.
-3. Rebase your target feature branch onto the latest `main` branch state.
-4. Manually resolve the resulting rebase conflicts, then resume using `--continue`.
-5. Run an interactive rebase (`git rebase -i`) to squash small commits and clean up your log messages.
-6. Use `git cherry-pick` to bring over the isolated hotfix from the abandoned branch.
-7. Merge the polished feature branch into `main` using your team's integration strategy.
-8. Verify the final graph state and staging layout inside `lazygit`.
-9. Safely push the completed history up to the remote server using `--force-with-lease`.
-
 ---
 
 \center
